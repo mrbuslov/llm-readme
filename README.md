@@ -60,9 +60,9 @@ Positive
 
 ### Number of examples:
 
-One-shot: 1 example
-Few-shot: typically 2-10 examples
-Many-shot: 10+ examples (less common term)
+One-shot: 1 example  
+Few-shot: typically 2-10 examples  
+Many-shot: 10+ examples (less common term)  
 
 Why? :)
 - You don't need to fine-tune the model
@@ -85,7 +85,121 @@ Use **few-shot** when:
 ---
 
 # Chain-of-Thought Prompting
-(description)
+This is about making models think **STEP-BY-STEP**. The idea: instead of jumping straight to the answer, make the model show its **reasoning process**.
+
+## What is Chain-of-Thought (CoT)?
+### The idea
+You ask the model to break down complex problems into intermediate steps before giving the final answer.  
+Without CoT, models often fail at multi-step reasoning. With CoT, they "think out loud".
+
+**Without CoT - Input**:
+```
+Roger has 5 tennis balls. He buys 2 more cans of tennis balls. 
+Each can has 3 tennis balls. How many tennis balls does he have now?
+```
+**Without CoT - Output**:
+```
+11 tennis balls
+```
+(Model might get it wrong or right by luck)
+
+**With CoT - Input**:
+```
+Roger has 5 tennis balls. He buys 2 more cans of tennis balls. 
+Each can has 3 tennis balls. How many tennis balls does he have now?
+
+Let's think step by step:
+```
+**With CoT - Output**:
+```
+Let's think step by step:
+1. Roger starts with 5 tennis balls
+2. He buys 2 cans of tennis balls
+3. Each can has 3 balls, so 2 cans = 2 × 3 = 6 balls
+4. Total = 5 + 6 = 11 tennis balls
+
+Answer: 11 tennis balls
+```
+
+## Two types of CoT
+
+### Zero-shot CoT
+Just add "Let's think step by step" or "Let's break this down" to your prompt.  
+**Input**:
+```
+What is 15% of 240? Let's think step by step.
+```
+**Output**:
+```
+Step 1: Convert percentage to decimal: 15% = 0.15
+Step 2: Multiply: 240 × 0.15 = 36
+Answer: 36
+```
+
+### Few-shot CoT
+Show examples with step-by-step reasoning.  
+**Input**:
+```
+Q: A store has 23 apples. They sell 17. How many are left?
+A: Let's think step by step.
+- Started with: 23 apples
+- Sold: 17 apples
+- Remaining: 23 - 17 = 6 apples
+Answer: 6 apples
+
+Q: John has $50. He spends $12 on lunch and $8 on coffee. How much does he have left?
+A:
+```
+**Output**:
+```
+Let's think step by step.
+- Started with: $50
+- Spent on lunch: $12
+- Spent on coffee: $8
+- Total spent: $12 + $8 = $20
+- Remaining: $50 - $20 = $30
+Answer: $30
+```
+
+## When to use CoT?
+
+Use **Chain-of-Thought** when:
+- Math problems (especially multi-step)
+- Logic puzzles
+- Planning tasks
+- Debugging code
+- Any task requiring multiple reasoning steps
+- Model gives wrong answers with direct prompting
+
+Don't use CoT when:
+- Simple factual questions
+- Tasks that don't need reasoning
+- You want fast, short responses
+- Token cost matters a lot
+
+## Why it works?
+Models are better at reasoning when they externalize intermediate steps. It's like showing your work in math class - helps catch errors and follow logic.
+
+The model uses its own output as additional context for the next part of reasoning.
+
+## Pro tips
+**Trigger phrases that work**:
+- "Let's think step by step"
+- "Let's break this down"
+- "First, let's analyze..."
+- "Let's solve this systematically"
+
+**Structure your CoT prompts**:
+```
+Problem: [state the problem clearly]
+
+Let's think step by step:
+1. [first step]
+2. [second step]
+...
+
+Answer: [final answer]
+```
 
 ---
 
