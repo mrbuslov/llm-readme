@@ -439,8 +439,130 @@ Solution: Cache common inputs, use cheaper models for obvious cases.
 ---
 
 # Hallucination Detection
-(description)
 
+This is about catching when LLMs make stuff up. They sound confident, but they're lying (unintentionally).
+
+## What is a hallucination?
+
+The model generates information that:
+- Is factually wrong
+- Doesn't exist (fake citations, made-up people, invented statistics)
+- Contradicts the source material you gave it
+
+**Example**:
+```
+User: Who wrote "The Great Gatsby"?
+
+Model: "The Great Gatsby" was written by Ernest Hemingway in 1925.
+```
+(It was F. Scott Fitzgerald. Model sounds 100% confident but is wrong.)
+
+## Why do hallucinations happen?
+
+- LLMs are trained to generate **plausible** text, not **true** text
+- They don't "know" facts — they predict the next likely word
+- If they don't know something, they won't say "I don't know" — they'll guess confidently
+- Long outputs = more chances to hallucinate
+
+## How to detect hallucinations
+
+### Option 1: Ask the model to verify itself
+Make the model check its own output.
+
+```
+You said: "The population of France is 89 million."
+
+Is this statement factually correct? 
+Think step by step and verify.
+```
+
+Not perfect (model can double down on mistakes), but catches obvious errors.
+
+### Option 2: Source grounding (best for RAG)
+If you gave the model documents, check if the answer is actually in those documents.
+
+```python
+checker_prompt = """
+Source document:
+{document}
+
+Model's answer:
+{answer}
+
+Is this answer fully supported by the source document?
+Reply: SUPPORTED, PARTIALLY_SUPPORTED, or NOT_SUPPORTED
+"""
+```
+
+### Option 3: External fact-checking
+Use search or knowledge base to verify claims.
+
+```python
+def verify_claim(claim):
+    # Search for evidence
+    search_results = web_search(claim)
+    
+    # Ask model to compare
+    prompt = f"""
+    Claim: {claim}
+    
+    Search results:
+    {search_results}
+    
+    Does the evidence support this claim? YES/NO/UNCLEAR
+    """
+    return model.generate(prompt)
+```
+
+### Option 4: Confidence scoring
+Some APIs return token probabilities. Low confidence = higher hallucination risk.
+
+```python
+# If using OpenAI with logprobs
+if token_probability < 0.7:
+    flag_as_uncertain(token)
+```
+
+## Prevention > Detection
+
+Best strategies to **reduce** hallucinations:
+
+**1. Give context (RAG)**
+```
+Answer ONLY based on the following documents:
+{documents}
+
+If the answer is not in the documents, say "I don't have this information."
+```
+
+**2. Ask for sources**
+```
+Provide your answer with citations. 
+For each claim, indicate where it comes from.
+```
+
+**3. Lower temperature**
+```python
+# Higher temperature = more creative = more hallucinations
+response = model.generate(prompt, temperature=0.2)  # Lower is safer
+```
+
+**4. Add uncertainty instructions**
+```
+If you're not sure about something, say "I'm not certain, but..."
+Never make up facts. It's okay to say "I don't know."
+```
+
+**5. Limit scope**
+```
+You are a customer support bot for Acme Corp.
+Only answer questions about our products.
+For anything else, say "I can only help with Acme products."
+```
+
+## Tools & resources
+
+- **SelfCheckGPT**: https://github.com/potsawee/selfcheckgpt
 ---
 
 # Observability Tools (Langfuse, LangSmith, PromptLayer)
