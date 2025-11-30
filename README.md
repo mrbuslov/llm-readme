@@ -4,9 +4,6 @@
 - [Prompt Injection & Guardrails](#prompt-injection--guardrails)
 - [Toxicity Filtering](#toxicity-filtering)
 - [Hallucination Detection](#hallucination-detection)
-- [Observability Tools (Langfuse, LangSmith, PromptLayer)](#observability-tools-langfuse-langsmith-promptlayer)
-- [Integration SDKs (LangChain, Semantic Kernel, Haystack)](#integration-sdks-langchain-semantic-kernel-haystack)
-- [RAG & System Prompt Fine-tuning](#rag--system-prompt-fine-tuning)
 - [AI Governance & Risk Management](#ai-governance--risk-management)
 
 ---
@@ -565,20 +562,201 @@ For anything else, say "I can only help with Acme products."
 - **SelfCheckGPT**: https://github.com/potsawee/selfcheckgpt
 ---
 
-# Observability Tools (Langfuse, LangSmith, PromptLayer)
-(description)
-
----
-
-# Integration SDKs (LangChain, Semantic Kernel, Haystack)
-(description)
-
----
-
-# RAG & System Prompt Fine-tuning
-(description)
-
----
-
 # AI Governance & Risk Management
-(description)
+
+This is about making sure your AI doesn't blow up your company. Legal stuff, ethical stuff, "who's responsible when things go wrong" stuff.
+
+## What is AI Governance?
+
+A set of rules, processes, and controls that answer:
+- Who can deploy AI in the company?
+- What data can we use for training?
+- Who's responsible if AI makes a mistake?
+- How do we track what our models are doing?
+- Are we compliant with laws (GDPR, EU AI Act, etc.)?
+
+Basically: **bureaucracy for AI**, but the useful kind.
+
+## Why should you care?
+
+**Scenario 1**: Your chatbot gives medical advice. Someone follows it. Gets hurt. Lawsuit.
+
+**Scenario 2**: Your model was trained on private customer data. Regulator finds out. Massive fine.
+
+**Scenario 3**: AI makes hiring decisions. Turns out it's biased against women. PR disaster + legal trouble.
+
+**Scenario 4**: Nobody knows which model version is in production. Bug appears. Can't reproduce. Can't fix.
+
+## Core components
+
+### 1. Risk Assessment
+
+Before deploying any AI, ask:
+
+```
+- What's the worst that could happen?
+- Who could be harmed? (users, employees, public)
+- What data does it use? (personal, sensitive, public)
+- Can outputs be traced back and explained?
+- What if the model is wrong?
+```
+
+**Risk levels** (EU AI Act style):
+
+| Level | Examples | Requirements |
+|-------|----------|--------------|
+| Unacceptable | Social scoring, manipulation | Banned |
+| High | Medical diagnosis, hiring, credit scoring | Strict rules, audits |
+| Limited | Chatbots, content generation | Transparency required |
+| Minimal | Spam filters, recommendations | Basically free |
+
+### 2. Data Governance
+
+Where did your training data come from?
+
+```
+Questions to answer:
+- Do we have the right to use this data?
+- Does it contain personal information (PII)?
+- Is it biased? (gender, race, age, etc.)
+- How long can we keep it?
+- Can users request deletion?
+```
+
+**Example policy**:
+```
+- All training data must be approved by Legal
+- PII must be anonymized before training
+- Data sources must be documented
+- Retention period: 2 years max
+```
+
+### 3. Model Registry
+
+Track every model like you track code. You need to know:
+
+```
+- Model name & version
+- Who trained it and when
+- What data was used
+- Performance metrics
+- Where it's deployed
+- Known limitations
+```
+
+```python
+# Example model card (simplified)
+model_card = {
+    "name": "customer-support-bot-v2",
+    "version": "2.3.1",
+    "trained_by": "ML Team",
+    "date": "2024-01-15",
+    "dataset": "support_tickets_2023_anonymized",
+    "accuracy": 0.89,
+    "limitations": [
+        "Only English",
+        "May struggle with technical questions",
+        "Not for medical/legal advice"
+    ],
+    "deployed_to": ["prod-us", "prod-eu"],
+    "approved_by": "John Smith, AI Ethics Board"
+}
+```
+
+### 4. Human Oversight
+
+Not everything should be automated.
+
+**Levels of autonomy**:
+
+```
+Full automation     → AI decides, no human involved
+Human-on-the-loop   → AI decides, human monitors
+Human-in-the-loop   → AI suggests, human approves
+Human-only          → No AI, human does everything
+```
+
+**Rule of thumb**:
+- High stakes (medical, legal, financial) → human-in-the-loop minimum
+- Low stakes (recommendations, summaries) → can automate more
+
+### 5. Incident Response
+
+When (not if) something goes wrong:
+
+```
+1. Detect    → Monitoring, user reports, automated alerts
+2. Assess    → How bad is it? Who's affected?
+3. Contain   → Rollback? Disable feature? Manual override?
+4. Fix       → Patch the model/prompt/system
+5. Review    → What went wrong? How to prevent next time?
+6. Report    → Notify stakeholders, regulators if required
+```
+
+**Example incident**:
+```
+Issue: Chatbot started recommending competitor products
+Detected: User complaint via support ticket
+Severity: Medium (reputation risk)
+Action: Rolled back to previous prompt version
+Root cause: New prompt template had formatting bug
+Prevention: Added automated testing for prompt changes
+```
+
+## Compliance frameworks
+
+**What you might need to follow**:
+
+| Framework | What it covers | Who it affects |
+|-----------|---------------|----------------|
+| EU AI Act | AI risk classification, transparency | Anyone serving EU users |
+| GDPR | Personal data, right to explanation | Anyone with EU user data |
+| SOC 2 | Security controls, audits | B2B companies |
+| HIPAA | Medical data | US healthcare |
+| CCPA | California privacy law | Anyone with CA user data |
+
+## Documentation you need
+
+Minimum viable governance:
+
+```
+□ AI Policy              → Rules for building/deploying AI
+□ Risk Assessment        → Per-model risk analysis
+□ Model Cards            → What each model does, limitations
+□ Data Inventory         → What data we use, where from
+□ Incident Playbook      → What to do when things break
+□ Audit Logs             → Who did what, when
+□ User Disclosure        → How we tell users they're talking to AI
+```
+
+## Who's responsible?
+
+**RACI matrix example**:
+
+| Task | Responsible | Accountable | Consulted | Informed |
+|------|-------------|-------------|-----------|----------|
+| Model development | ML Engineer | ML Lead | Legal, Ethics | Product |
+| Risk assessment | ML Lead | CTO | Legal | All |
+| Deployment approval | DevOps | Product Owner | ML, Legal | All |
+| Incident response | On-call engineer | CTO | Legal, PR | All |
+| Compliance audit | Legal | CEO | ML, Security | Board |
+
+## Pro tips
+
+- Start small: don't try to implement everything at once
+- Automate what you can (monitoring, logging, alerts)
+- Make governance part of the workflow, not a separate process
+- Train your team — everyone should know the basics
+- Document decisions, not just outcomes
+- Review and update policies regularly (AI moves fast)
+- When in doubt, consult Legal
+
+## Useful resources
+
+- **NIST AI Risk Management Framework**: https://www.nist.gov/itl/ai-risk-management-framework
+- **EU AI Act text**: https://artificialintelligenceact.eu/
+- **Google PAIR (People + AI Research)**: https://pair.withgoogle.com/
+- **Microsoft Responsible AI**: https://www.microsoft.com/en-us/ai/responsible-ai
+- **AI Incident Database**: https://incidentdatabase.ai/ (learn from others' mistakes)
+
+---
