@@ -6,6 +6,16 @@
   * [The Real Difference](#the-real-difference)
   * [Which to Use](#which-to-use)
 
+* [Generation Parameters: Temperature, Top-K, Top-P](#generation-parameters-temperature-top-k-top-p)
+
+  * [How LLMs Pick the Next Word](#how-llms-pick-the-next-word)
+  * [Temperature](#temperature)
+  * [Top-K Sampling](#top-k-sampling)
+  * [Top-P Sampling (Nucleus)](#top-p-sampling-nucleus)
+  * [Min-P Sampling](#min-p-sampling)
+  * [Combining Parameters](#combining-parameters)
+  * [Quick Reference](#quick-reference)
+
 * [Zero-/Few-shot Prompting](#zero-few-shot-prompting)
 
   * [Zero-shot](#zero-shot)
@@ -166,6 +176,273 @@ Your retrieval model (finding relevant chunks) = usually encoder (E5, BGE, OpenA
 Your generation model (answering questions) = usually decoder (GPT, Claude)
 
 They work together: encoder finds, decoder answers.
+
+---
+
+# Generation Parameters: Temperature, Top-K, Top-P
+
+How to control LLM creativity and randomness. These settings determine how the model picks words.
+
+## How LLMs Pick the Next Word
+
+Imagine you're writing "The cat sat on the..." and ask the model to continue.
+
+The model doesn't just pick one word. It calculates probability for EVERY word in its vocabulary:
+
+```
+"mat"     → 25%
+"floor"   → 20%
+"couch"   → 15%
+"bed"     → 10%
+"table"   → 8%
+"roof"    → 5%
+"moon"    → 0.1%
+"banana"  → 0.001%
+... thousands more words with tiny probabilities
+```
+
+Now, how does it choose? It could:
+1. Always pick the most likely word ("mat") → boring, repetitive
+2. Randomly pick from ALL words → chaotic, nonsense
+3. Something in between → that's where these parameters come in
+
+---
+
+## Temperature
+
+**What it does:** Controls how "sharp" or "flat" the probability distribution is.
+
+Think of it like this:
+- **Low temperature (0.1-0.3)** = Model is confident, picks obvious choices
+- **High temperature (0.8-1.5)** = Model is adventurous, considers unusual options
+
+**Temperature = 0** (or very close to 0)
+```
+"mat"     → 99%
+"floor"   → 1%
+everything else → ~0%
+```
+Model almost always picks "mat". Same input = same output. Deterministic.
+
+**Temperature = 1** (default)
+```
+"mat"     → 25%
+"floor"   → 20%
+"couch"   → 15%
+... (original probabilities)
+```
+Model picks based on natural probabilities. Sometimes "mat", sometimes "floor".
+
+**Temperature = 2** (high)
+```
+"mat"     → 15%
+"floor"   → 14%
+"couch"   → 13%
+"bed"     → 12%
+"moon"    → 5%
+... (flattened, more equal chances)
+```
+Even unlikely words get a fair shot. More creative, but can get weird.
+
+**The math (simplified):**
+```
+Original scores: [A=2.0, B=1.5, C=1.0, D=0.5]
+
+Low temp (0.5):  divide by 0.5 → [A=4.0, B=3.0, C=2.0, D=1.0]
+                 After softmax: A dominates even more
+
+High temp (2.0): divide by 2.0 → [A=1.0, B=0.75, C=0.5, D=0.25]
+                 After softmax: probabilities more equal
+```
+
+**When to use:**
+- **Temp 0-0.3:** Factual answers, code, math, consistency needed
+- **Temp 0.5-0.7:** Balanced, good default for most tasks
+- **Temp 0.8-1.2:** Creative writing, brainstorming, variety wanted
+- **Temp >1.5:** Experimental, often produces nonsense
+
+---
+
+## Top-K Sampling
+
+**What it does:** Only consider the K most likely words, ignore the rest.
+
+**Example: Top-K = 3**
+```
+Original:
+"mat"     → 25%   ✓ (top 3)
+"floor"   → 20%   ✓ (top 3)
+"couch"   → 15%   ✓ (top 3)
+"bed"     → 10%   ✗ (ignored)
+"moon"    → 0.1%  ✗ (ignored)
+"banana"  → 0.001% ✗ (ignored)
+
+After Top-K=3 (renormalized):
+"mat"     → 42%
+"floor"   → 33%
+"couch"   → 25%
+```
+
+Model only picks from "mat", "floor", or "couch". Can't pick "banana" no matter what.
+
+**Top-K values:**
+- **K = 1:** Always pick the most likely word (same as temp=0)
+- **K = 10-50:** Focused but some variety
+- **K = 100+:** More diversity, might include weird options
+- **K = vocabulary size:** No filtering (disabled)
+
+**Problem with Top-K:** Fixed number doesn't adapt.
+
+Sometimes the model is very confident:
+```
+"Paris" → 95%
+"London" → 3%
+"Berlin" → 1%
+... rest → 1%
+```
+Top-K=50 would include 50 words when really only "Paris" makes sense.
+
+Other times, many words are equally good:
+```
+"red" → 12%
+"blue" → 11%
+"green" → 10%
+"yellow" → 9%
+... 20 more colors around 2-5%
+```
+Top-K=5 would cut off perfectly good options.
+
+---
+
+## Top-P Sampling (Nucleus)
+
+**What it does:** Include words until their combined probability reaches P. Adaptive, not fixed.
+
+**Example: Top-P = 0.6 (60%)**
+```
+"mat"     → 25%  (cumulative: 25%)  ✓
+"floor"   → 20%  (cumulative: 45%)  ✓
+"couch"   → 15%  (cumulative: 60%)  ✓ ← stop here, reached 60%
+"bed"     → 10%  ✗
+"table"   → 8%   ✗
+...
+```
+
+Only "mat", "floor", "couch" are considered. But if probabilities were different:
+
+```
+"Paris"   → 70%  (cumulative: 70%)  ✓ ← already over 60%, stop
+"London"  → 15%  ✗
+...
+```
+
+With Top-P=0.6, only "Paris" is considered because it alone exceeds 60%.
+
+**Top-P values:**
+- **P = 0.1-0.3:** Very focused, only most confident choices
+- **P = 0.5-0.7:** Balanced
+- **P = 0.9-0.95:** Diverse but still reasonable
+- **P = 1.0:** No filtering (disabled)
+
+**Why Top-P is usually better than Top-K:**
+- Adapts to model confidence automatically
+- Confident prediction → fewer choices
+- Uncertain prediction → more choices
+
+---
+
+## Min-P Sampling
+
+**What it does:** A smarter alternative to both Top-K and Top-P. Keeps words that are at least X% as likely as the top word.
+
+**Example: Min-P = 0.1 (10%)**
+```
+Top word: "mat" → 25%
+Threshold: 25% × 0.1 = 2.5%
+
+"mat"     → 25%   ✓ (above 2.5%)
+"floor"   → 20%   ✓ (above 2.5%)
+"couch"   → 15%   ✓ (above 2.5%)
+"bed"     → 10%   ✓ (above 2.5%)
+"table"   → 8%    ✓ (above 2.5%)
+"roof"    → 5%    ✓ (above 2.5%)
+"moon"    → 0.1%  ✗ (below 2.5%)
+"banana"  → 0.001% ✗ (below 2.5%)
+```
+
+**Why Min-P is clever:**
+
+When model is confident (top word = 90%):
+```
+Threshold: 90% × 0.1 = 9%
+Only words above 9% survive → very few options
+```
+
+When model is uncertain (top word = 20%):
+```
+Threshold: 20% × 0.1 = 2%
+Words above 2% survive → many options
+```
+
+It automatically gives more choices when the model is unsure, fewer when it's confident.
+
+**Min-P values:**
+- **0.05-0.1:** Good starting point
+- **0.2+:** More restrictive
+
+---
+
+## Combining Parameters
+
+These parameters work together (processed in order):
+
+```
+Raw probabilities
+    ↓
+Temperature (reshapes distribution)
+    ↓
+Top-K (cuts to K options)
+    ↓
+Top-P (cuts by cumulative probability)
+    ↓
+Final sampling (random pick from what's left)
+```
+
+**Common combinations:**
+
+| Use Case | Temperature | Top-P | Top-K | Notes |
+|----------|-------------|-------|-------|-------|
+| Code generation | 0-0.2 | 0.95 | - | Predictable, correct |
+| Factual Q&A | 0.1-0.3 | 0.9 | - | Consistent answers |
+| Chat (balanced) | 0.7 | 0.9 | - | Natural, varied |
+| Creative writing | 0.9-1.2 | 0.95 | - | Diverse, interesting |
+| Brainstorming | 1.0-1.3 | 1.0 | - | Maximum variety |
+
+**Tips:**
+- Usually set **either** Top-K **or** Top-P, not both
+- Min-P can replace both if your API supports it
+- Start with defaults, adjust based on output quality
+- Too random? Lower temperature, lower Top-P
+- Too boring? Higher temperature, higher Top-P
+
+---
+
+## Quick Reference
+
+| Parameter | What it controls | Low value | High value |
+|-----------|------------------|-----------|------------|
+| **Temperature** | Probability sharpness | Predictable, focused | Random, creative |
+| **Top-K** | Max words to consider | Few safe choices | Many options |
+| **Top-P** | Cumulative probability cutoff | Only top candidates | Most vocabulary |
+| **Min-P** | Relative probability cutoff | Adaptive filtering | Less filtering |
+
+**Analogy:**
+
+Imagine picking a restaurant:
+- **Temperature** = How adventurous are you feeling? (0 = "same place as always", 1 = "let's try something new")
+- **Top-K** = "Only consider the 5 nearest restaurants"
+- **Top-P** = "Only consider restaurants that together make up 80% of my usual choices"
+- **Min-P** = "Only consider restaurants at least 10% as good as my favorite"
 
 ---
 
