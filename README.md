@@ -14,6 +14,14 @@
 
   * [When to use](#when-to-use)
   * [Trigger phrases](#trigger-phrases)
+
+* [Reflexion Prompting](#reflexion-prompting)
+
+  * [The Problem with One-Shot Attempts](#the-problem-with-one-shot-attempts)
+  * [How Reflexion Works](#how-reflexion-works)
+  * [When to Use](#when-to-use-1)
+  * [Reflexion vs Just Asking Again](#reflexion-vs-just-asking-again)
+
 * [Prompt Injection & Guardrails](#prompt-injection--guardrails)
 
   * [Prompt Injection](#prompt-injection)
@@ -225,6 +233,76 @@ Math, logic puzzles, planning, debugging, multi-step anything. Don't use for sim
 Why it works: model uses its own output as context for the next step. Like showing work in math class.
 
 Trigger phrases that work: "Let's think step by step", "Let's break this down", "First, let's analyze..." - **anything that hints at a step-by-step process**.
+
+---
+
+# Reflexion Prompting
+
+Teaching AI to learn from its mistakes. Like Chain-of-Thought, but with a feedback loop.
+
+## The Problem with One-Shot Attempts
+
+Regular prompting: model tries once, you get whatever you get. If it fails, it fails.
+
+```
+Task: Write code to parse CSV
+Model: [writes buggy code]
+You: [code crashes]
+Model: ¯\_(ツ)_/¯ (doesn't know it failed)
+```
+
+## How Reflexion Works
+
+The model tries, evaluates its attempt, reflects on what went wrong, and tries again with that knowledge.
+
+```
+Attempt 1: [writes code]
+    ↓
+Evaluation: "Code crashed on empty rows"
+    ↓
+Reflection: "I didn't handle edge case of empty rows. Need to add check."
+    ↓
+Attempt 2: [writes better code, remembering the lesson]
+```
+
+**Three components:**
+
+1. **Actor** - does the actual task (uses CoT or ReAct to think through it)
+2. **Evaluator** - checks if the result is good (can be another LLM, tests, or rules)
+3. **Self-Reflection** - analyzes what went wrong and how to fix it
+
+## When to Use
+
+- **Coding tasks** - run tests, reflect on failures, fix bugs
+- **Math/reasoning** - verify answer, if wrong, think about the mistake
+- **Multi-step planning** - check if plan makes sense, adjust
+- **Writing** - evaluate draft, identify weaknesses, rewrite
+
+## Reflexion vs Just Asking Again
+
+**Naive retry:**
+```
+Attempt 1: [wrong answer]
+Attempt 2: [same wrong answer, or random different one]
+```
+
+**Reflexion:**
+```
+Attempt 1: [wrong answer]
+Reflection: "I made X mistake because Y. Next time I should Z."
+Attempt 2: [better answer, learned from specific mistake]
+```
+
+The key is **explicit reflection** stored in memory. Model doesn't just try again - it learns what went wrong.
+
+## Practical Tips
+
+- **Evaluator matters** - garbage evaluation = garbage learning. Use tests for code, ground truth for facts
+- **Be specific in reflections** - "I was wrong" is useless. "I forgot to handle null values" is actionable
+- **Limit attempts** - 2-4 is usually enough. More = diminishing returns + cost
+- **Works best for verifiable tasks** - code (tests), math (correct answer), not creative writing
+
+**TL;DR:** Reflexion = try → evaluate → reflect on mistakes → try again with lessons learned. Turns single-shot LLM into iterative learner.
 
 ---
 
