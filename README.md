@@ -36,6 +36,14 @@
   * [Min docs needed](#min-docs-needed)
   * [Resources](#resources)
 
+* [Text Preprocessing](#text-preprocessing)
+
+  * [Why Bother? Can't LLM Handle This?](#why-bother-cant-llm-handle-this)
+  * [Stemming](#stemming)
+  * [Lemmatization](#lemmatization)
+  * [Stemming vs Lemmatization](#stemming-vs-lemmatization)
+  * [When to Use What](#when-to-use-what)
+
 * [Retrieval-Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
 
   * [Why RAG](#why-rag)
@@ -317,6 +325,218 @@ High stakes (medical, legal, financial) == human-in-the-loop minimum.
 - Google PAIR: https://pair.withgoogle.com/
 - Microsoft Responsible AI: https://www.microsoft.com/en-us/ai/responsible-ai
 - AI Incident Database: https://incidentdatabase.ai/ (learn from others' mistakes)
+
+---
+
+# Text Preprocessing
+
+Turning messy text into normalized form before feeding to models. Critical for search, classification, RAG pipelines.  
+Why can't LLM Handle This? In short - LLMs can, but it's expensive and slow. Preprocessing is for everything *before* the LLM.
+
+**The real use cases:**
+
+1. **Vector search / RAG retrieval** - you're comparing embeddings, not asking LLM. Query "running" should match document with "ran". Embeddings help, but stemming/lemmatization boost recall for keyword search (BM25).
+
+2. **Traditional ML** - if you're using TF-IDF, bag-of-words, or classic classifiers (not LLMs), preprocessing is mandatory. "Run", "running", "runs" should be one feature, not three.
+
+3. **Search indexes** - Elasticsearch, Solr, etc. User searches "policies" but document says "policy". Without normalization = no match.
+
+4. **Token reduction** - LLMs charge per token. Normalizing text can reduce token count 10-20% in some cases.
+
+5. **Deduplication** - finding near-duplicates in datasets. Normalized text = easier comparison.
+
+**When LLM is overkill:**
+```python
+# Bad - using GPT to normalize text
+response = openai.chat("Lemmatize this: running cats")
+# Cost: $0.001, latency: 500ms, for 2 words
+
+# Good - use nltk/spacy
+lemmas = [lemmatizer.lemmatize(w) for w in words]
+# Cost: $0, latency: 1ms
+```
+
+**When to skip preprocessing:**
+- Direct LLM chat (it understands "running" = "run")
+- Modern embedding models (they handle morphology well)
+- Small datasets where you can afford LLM calls
+
+**TL;DR:** Preprocessing is for pipelines where LLM isn't involved (search, classic ML) or where calling LLM for normalization is wasteful.
+
+---
+
+## Stemming
+
+Chopping off word endings to get the "root" form. Fast and dumb - just cuts suffixes without understanding.
+
+```python
+from nltk.stem import PorterStemmer
+
+stemmer = PorterStemmer()
+
+words = ["running", "runs", "ran", "runner", "easily", "fairly"]
+stems = [stemmer.stem(w) for w in words]
+# -> ["run", "run", "ran", "runner", "easili", "fairli"]
+```
+
+Notice: "ran" stays "ran" (doesn't understand it's "run"), "easily" becomes "easili" (not a real word).
+
+**Popular stemmers**
+
+| Algorithm | Speed | Quality | Notes |
+|-----------|-------|---------|-------|
+| Porter | Fast | Basic | Classic, aggressive |
+| Snowball (Porter2) | Fast | Better | Improved Porter, multi-language |
+| Lancaster | Fastest | Rough | Very aggressive, often over-stems |
+
+```python
+from nltk.stem import SnowballStemmer
+
+# Snowball supports multiple languages
+ru_stemmer = SnowballStemmer("russian")
+ru_stemmer.stem("бегающий")  # -> "бега"
+
+en_stemmer = SnowballStemmer("english")
+en_stemmer.stem("running")   # -> "run"
+```
+
+**Problems with stemming**
+
+- Over-stemming: different meanings → same stem ("university", "universe" → "univers")
+- Under-stemming: same meaning → different stems ("alumnus", "alumni" → stay different)
+- Non-words: "studies" → "studi", "easily" → "easili"
+
+Good for: search indexing, when you need speed, when exact form doesn't matter.
+
+---
+
+## Lemmatization
+
+Getting the dictionary form (lemma) of a word. Slower but understands grammar.
+
+```python
+import spacy
+nlp = spacy.load("en_core_web_sm")
+
+doc = nlp("The cats were running quickly")
+lemmas = [token.lemma_ for token in doc]
+# -> ["the", "cat", "be", "run", "quickly"]
+```
+
+Notice: "were" → "be", "running" → "run", "cats" → "cat". Actual words, proper forms.
+
+```python
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+
+lemmatizer = WordNetLemmatizer()
+
+# Need to specify part of speech for best results
+lemmatizer.lemmatize("running", pos='v')  # -> "run"
+lemmatizer.lemmatize("running", pos='n')  # -> "running" (as noun)
+
+lemmatizer.lemmatize("better", pos='a')   # -> "good" (understands comparatives!)
+lemmatizer.lemmatize("ran", pos='v')      # -> "run" (handles irregular verbs)
+```
+
+**POS matters a lot**
+
+Without POS tag, lemmatizers often assume noun:
+```python
+lemmatizer.lemmatize("meeting")      # -> "meeting" (noun: a meeting)
+lemmatizer.lemmatize("meeting", 'v') # -> "meet" (verb: they are meeting)
+```
+
+Full pipeline with auto POS:
+```python
+import nltk
+from nltk import pos_tag, word_tokenize
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import wordnet
+
+def get_wordnet_pos(treebank_tag):
+    """Convert Penn Treebank POS to WordNet POS"""
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    return wordnet.NOUN  # default
+
+def lemmatize_sentence(text):
+    lemmatizer = WordNetLemmatizer()
+    tokens = word_tokenize(text)
+    pos_tags = pos_tag(tokens)
+
+    return [lemmatizer.lemmatize(word, get_wordnet_pos(pos))
+            for word, pos in pos_tags]
+
+lemmatize_sentence("The striped bats are hanging on their feet")
+# -> ['The', 'strip', 'bat', 'be', 'hang', 'on', 'their', 'foot']
+```
+
+---
+
+## Stemming vs Lemmatization
+
+| Aspect | Stemming | Lemmatization |
+|--------|----------|---------------|
+| Output | Root (may not be a word) | Dictionary form (always a word) |
+| Speed | Fast (rule-based) | Slower (needs dictionary/model) |
+| Accuracy | Lower | Higher |
+| "better" | "better" | "good" |
+| "ran" | "ran" | "run" |
+| "studies" | "studi" | "study" |
+| Memory | Minimal | Needs dictionary/model |
+| Languages | Easy to add | Needs language-specific resources |
+
+```python
+# Side by side
+from nltk.stem import PorterStemmer, WordNetLemmatizer
+
+stemmer = PorterStemmer()
+lemmatizer = WordNetLemmatizer()
+
+words = ["caring", "cars", "studies", "better", "ran", "wolves"]
+
+for word in words:
+    print(f"{word:10} | stem: {stemmer.stem(word):10} | lemma: {lemmatizer.lemmatize(word, 'v')}")
+
+# caring     | stem: care       | lemma: care
+# cars       | stem: car        | lemma: car
+# studies    | stem: studi      | lemma: study
+# better     | stem: better     | lemma: better (need 'a' for adjective)
+# ran        | stem: ran        | lemma: run
+# wolves     | stem: wolv       | lemma: wolves (need 'n' for noun)
+```
+
+---
+
+## When to Use What
+
+**Use Stemming when:**
+- Building search indexes (speed matters)
+- Large-scale text processing
+- Exact word form doesn't matter
+- Memory is constrained
+- Working with morphologically simple languages
+
+**Use Lemmatization when:**
+- Text generation or display to users
+- Semantic analysis where meaning matters
+- Working with irregular verbs/nouns
+- Building knowledge bases
+- Need grammatically correct output
+
+**For RAG specifically:**
+- Indexing: stemming often enough (faster, good recall)
+- Query expansion: lemmatization better (more precise)
+- Or skip both: modern embeddings handle word forms well
+
+**TL;DR:** For most modern NLP with embeddings, you can skip both :) For traditional search (BM25, TF-IDF) or limited compute, stemming wins. For anything user-facing or semantic, lemmatization.
 
 ---
 
@@ -897,3 +1117,16 @@ Parsing:
 Evaluation:
 - Ragas: https://github.com/explodinggradients/ragas
 - DeepEval: https://github.com/confident-ai/deepeval
+
+
+
+https://magazine.sebastianraschka.com/p/understanding-encoder-and-decoder - тут про енкодер та декодер - основні архітектури ллм та ретрівел моделей
+https://www.promptingguide.ai/applications/function_calling.en#getting-started-with-function-calling
+https://www.promptingguide.ai/techniques/react
+Тут про прототип перших агентів (реакт промт) і про фанкшн колінг детальніше (який дозволяє агентам використовувати тули)
+https://www.promptingguide.ai/techniques/reflexion - тут про рефлекшн промт
+https://www.reddit.com/r/AIDungeon/comments/1eppgyq/can_someone_explain_what_top_k_and_top_p_are_and/
+https://www.reddit.com/r/GPT3/comments/qujerp/what_is_the_difference_between_temperature_and/
+(Тут в коментарях пояснюють різницю між температурою, топ п та топ к)
+https://www.youtube.com/watch?v=XsLK3tPy9SI (тут про температуру)
+https://youtu.be/wjZofJX0v4M?t=1359 (тут трішки детальніше про температуру, саме останній шматочок)
