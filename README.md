@@ -1,5 +1,11 @@
 # Content
 
+* [LLM Architectures: Encoder vs Decoder](#llm-architectures-encoder-vs-decoder)
+
+  * [Wait, Don't All LLMs Understand Text?](#wait-dont-all-llms-understand-text)
+  * [The Real Difference](#the-real-difference)
+  * [Which to Use](#which-to-use)
+
 * [Zero-/Few-shot Prompting](#zero-few-shot-prompting)
 
   * [Zero-shot](#zero-shot)
@@ -61,6 +67,97 @@
   * [Links](#links)
 
 
+
+---
+
+# LLM Architectures: Encoder vs Decoder
+
+The two main flavors of transformer models. Understanding this helps pick the right tool.
+
+## Wait, Don't All LLMs Understand Text?
+
+Yes! Both encoders and decoders understand input text perfectly well. The confusion is common.
+
+The difference is **not** about understanding - it's about **what they do after understanding**.
+
+## The Real Difference
+
+**Encoder (BERT, RoBERTa, E5, BGE)**
+
+```
+Input:  "This movie was terrible"
+        ↓
+     [Understands meaning]
+        ↓
+Output: [0.12, -0.34, 0.56, ...] (embedding vector)
+```
+
+Encoder reads text, understands it, outputs **numbers** (embeddings). These numbers represent meaning mathematically. Then you use them for:
+- Classification: "Is this positive or negative?" → Negative
+- Similarity: "How close are these two texts?"
+- Search: "Find documents similar to this query"
+
+**Encoder does NOT generate text. It outputs understanding as numbers.**
+
+**Decoder (GPT, Claude, LLaMA, Mistral)**
+
+```
+Input:  "This movie was terrible"
+        ↓
+     [Understands meaning]
+        ↓
+Output: "I'm sorry to hear that. What didn't you like about it?"
+```
+
+Decoder reads text, understands it, generates **new text** word by word. Used for:
+- Chat / conversation
+- Text generation
+- Summarization
+- Translation
+- Code generation
+
+**Decoder outputs text, not numbers.**
+
+**Encoder-Decoder (T5, BART)**
+
+Best of both worlds. Encoder processes input, decoder generates output. Good for translation, summarization where input and output are both text but different.
+
+```
+Input:  "Translate to French: Hello world"
+        ↓
+     [Encoder understands]
+        ↓
+     [Decoder generates]
+        ↓
+Output: "Bonjour le monde"
+```
+
+---
+
+## Which to Use
+
+| Task | Architecture | Examples |
+|------|--------------|----------|
+| Embeddings for RAG | Encoder | BERT, E5, BGE, Cohere Embed |
+| Classification | Encoder | BERT, RoBERTa, DistilBERT |
+| Semantic search | Encoder | Sentence-BERT, E5 |
+| Chat / generation | Decoder | GPT-4, Claude, LLaMA |
+| Code completion | Decoder | Codex, StarCoder, Claude |
+| Translation | Encoder-Decoder | T5, NLLB, mBART |
+| Summarization | Both work | T5 (enc-dec) or GPT (decoder) |
+
+**Analogy:**
+- Encoder = Expert analyst who reads and gives you a score/rating (📊 numbers, labels)
+- Decoder = Conversationalist who reads and responds with words (💬 text, sentences)
+
+Both understand. Different outputs.
+
+**Why this matters for RAG:**
+
+Your retrieval model (finding relevant chunks) = usually encoder (E5, BGE, OpenAI embeddings)
+Your generation model (answering questions) = usually decoder (GPT, Claude)
+
+They work together: encoder finds, decoder answers.
 
 ---
 
