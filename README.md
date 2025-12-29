@@ -84,6 +84,16 @@
   * [Production Checklist](#production-checklist)
   * [Links](#links)
 
+* [Agent Protocols: AG-UI & A2UI](#agent-protocols-ag-ui--a2ui)
+
+  * [The Three Protocols](#the-three-protocols)
+  * [AG-UI (Agent-User Interaction)](#ag-ui-agent-user-interaction)
+  * [Event Types](#event-types)
+  * [LangGraph Integration](#langgraph-integration)
+  * [A2UI (Agent-to-User Interface)](#a2ui-agent-to-user-interface)
+  * [AG-UI vs A2UI](#ag-ui-vs-a2ui)
+  * [Links](#links-1)
+
 
 
 ---
@@ -1582,3 +1592,242 @@ https://www.reddit.com/r/GPT3/comments/qujerp/what_is_the_difference_between_tem
 (Тут в коментарях пояснюють різницю між температурою, топ п та топ к)
 https://www.youtube.com/watch?v=XsLK3tPy9SI (тут про температуру)
 https://youtu.be/wjZofJX0v4M?t=1359 (тут трішки детальніше про температуру, саме останній шматочок)
+
+---
+
+# Agent Protocols: AG-UI & A2UI
+
+Connecting AI agents to frontend applications. Traditional request-response doesn't work for agents because they're long-running, stream intermediate results, and are non-deterministic.
+
+## The Three Protocols
+
+Modern agentic apps rely on three complementary protocols:
+
+| Protocol | What it does | Who made it |
+|----------|--------------|-------------|
+| **MCP** (Model Context Protocol) | Agent access to tools & data | Anthropic |
+| **A2A** (Agent-to-Agent) | Multi-agent collaboration | Google |
+| **AG-UI** (Agent-User Interaction) | Agent ↔ Frontend connection | CopilotKit |
+
+They work together: MCP gives agents tools, A2A lets agents talk to each other, AG-UI brings agents to users.
+
+---
+
+## AG-UI (Agent-User Interaction)
+
+Open, lightweight, event-based protocol that standardizes how AI agents connect to user-facing applications.
+
+**Why needed:**
+- Agents are **long-running** - operations take minutes, not milliseconds
+- Agents **stream intermediate work** - need to show progress
+- Agents are **non-deterministic** - can't predict what UI they'll need
+- Traditional REST doesn't handle this well
+
+**Architecture:**
+
+```
+┌─────────────────┐     Events (SSE/WebSocket)     ┌─────────────────┐
+│                 │  ◄────────────────────────►   │                 │
+│    Frontend     │                               │  Agent Backend  │
+│  (React/Next)   │  • Lifecycle Events           │  (LangGraph,    │
+│                 │  • Text Message Events        │   CrewAI, etc)  │
+│                 │  • Tool Call Events           │                 │
+│                 │  • State Events               │                 │
+└─────────────────┘                               └─────────────────┘
+```
+
+---
+
+## Event Types
+
+AG-UI defines 16 event types covering everything from LLM token streaming to tool execution.
+
+**Lifecycle Events**
+- `RUN_STARTED` - agent began execution
+- `RUN_FINISHED` - agent completed
+- `RUN_ERROR` - something broke
+
+**Text Message Events** (streaming)
+- `TEXT_MESSAGE_START` - beginning of message
+- `TEXT_MESSAGE_CONTENT` - token stream
+- `TEXT_MESSAGE_END` - message complete
+
+**Tool Call Events**
+- `TOOL_CALL_START` - tool invocation began
+- `TOOL_CALL_ARGS` - arguments being passed
+- `TOOL_CALL_END` - tool finished
+
+**State Events** (key feature)
+- `STATE_SNAPSHOT` - full state dump
+- `STATE_DELTA` - incremental update
+
+State sync is what makes AG-UI special - frontend and backend share typed state with conflict resolution.
+
+---
+
+## LangGraph Integration
+
+**Backend (Python + FastAPI)**
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from ag_ui.core import RunAgentInput
+from ag_ui.encoder import EventEncoder
+
+app = FastAPI()
+
+@app.post("/agent")
+async def agent_endpoint(input_data: RunAgentInput):
+    encoder = EventEncoder()
+
+    async def event_stream():
+        # 1. Start
+        yield encoder.encode({"type": "RUN_STARTED", "thread_id": input_data.thread_id})
+
+        # 2. Initial state
+        yield encoder.encode({"type": "STATE_SNAPSHOT", "state": {"status": "processing"}})
+
+        # 3. Stream LangGraph output
+        async for chunk in langgraph_agent.astream(input_data.messages):
+            yield encoder.encode({"type": "TEXT_MESSAGE_CONTENT", "content": chunk})
+
+        # 4. Done
+        yield encoder.encode({"type": "RUN_FINISHED"})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+```
+
+**Frontend (Next.js + CopilotKit)**
+
+```typescript
+// API route - src/app/api/copilotkit/route.ts
+import { CopilotRuntime, HttpAgent } from "@copilotkit/runtime";
+
+export async function POST(req: Request) {
+  const runtime = new CopilotRuntime({
+    remoteAgents: [
+      new HttpAgent({
+        name: "my-agent",
+        url: "http://localhost:8000/agent",
+      }),
+    ],
+  });
+  return runtime.response(req);
+}
+```
+
+```tsx
+// Layout with provider
+import { CopilotKit } from "@copilotkit/react-core";
+
+export default function Layout({ children }) {
+  return (
+    <CopilotKit runtimeUrl="/api/copilotkit" agent="my-agent">
+      {children}
+    </CopilotKit>
+  );
+}
+```
+
+```tsx
+// Component with state access
+import { useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
+import { CopilotChat } from "@copilotkit/react-ui";
+
+function AgentUI() {
+  const { state } = useCoAgent({ name: "my-agent" });
+
+  // Render agent state in real-time
+  useCoAgentStateRender({
+    name: "my-agent",
+    render: ({ state }) => <Progress status={state.status} />,
+  });
+
+  return <CopilotChat />;
+}
+```
+
+**Packages:**
+```bash
+# Frontend
+npm install @copilotkit/react-core @copilotkit/react-ui @ag-ui/langgraph
+
+# Backend (Python)
+pip install ag-ui-langgraph
+```
+
+---
+
+## A2UI (Agent-to-User Interface)
+
+Google's spec (December 2025) for **generative UI**. Agents generate interactive interfaces that render natively across platforms.
+
+**Key difference from AG-UI:** AG-UI is about *communication* (how to send events). A2UI is about *content* (what UI to show).
+
+**How it works:**
+
+```
+Agent (Gemini/LLM)
+        │
+        ▼
+   A2UI JSON ────────► Transport (A2A or AG-UI)
+   (UI components)              │
+                                ▼
+                         A2UI Renderer
+                                │
+                 ┌──────────────┼──────────────┐
+                 ▼              ▼              ▼
+               Web          Mobile        Desktop
+           (React/Lit)  (Flutter/Swift)  (Compose)
+```
+
+**Security model:** A2UI is declarative data, not executable code. Client maintains a "catalog" of trusted components. Agent can only request components from that catalog - can't inject arbitrary code.
+
+**Example payload:**
+
+```json
+{
+  "components": [
+    { "id": "1", "type": "Card", "title": "Weather" },
+    { "id": "2", "type": "Text", "parent": "1", "content": "22°C, Sunny" },
+    { "id": "3", "type": "Button", "parent": "1", "label": "Refresh" }
+  ]
+}
+```
+
+Flat list with ID references - easy for LLMs to generate incrementally.
+
+---
+
+## AG-UI vs A2UI
+
+| | AG-UI | A2UI |
+|---|-------|------|
+| **Purpose** | Communication protocol | UI specification |
+| **Made by** | CopilotKit | Google |
+| **Focus** | Event streaming, state sync | Declarative UI components |
+| **Output** | Events (lifecycle, text, tools) | JSON describing widgets |
+| **Platform** | Web-first | Cross-platform native |
+
+**They complement each other:** A2UI describes *what to show*, AG-UI delivers *how to transmit it*.
+
+CopilotKit supports both - you can stream A2UI payloads over AG-UI protocol.
+
+---
+
+## Links
+
+**AG-UI:**
+- Docs: https://docs.ag-ui.com/
+- GitHub: https://github.com/ag-ui-protocol/ag-ui
+- NPM: https://www.npmjs.com/package/@ag-ui/langgraph
+
+**A2UI:**
+- Site: https://a2ui.org/
+- GitHub: https://github.com/google/A2UI
+- Google Blog: https://developers.googleblog.com/introducing-a2ui-an-open-project-for-agent-driven-interfaces/
+
+**Related:**
+- CopilotKit: https://www.copilotkit.ai/
+- LangGraph + AG-UI tutorial: https://www.copilotkit.ai/blog/how-to-add-a-frontend-to-any-langgraph-agent-using-ag-ui-protocol
