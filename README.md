@@ -1,5 +1,15 @@
 # Content
 
+* [Claude Code Tutorial](#claude-code-tutorial)
+
+  * [Voice Input Saves Hours](#voice-input-saves-hours)
+  * [Two Modes: Chat vs Plan](#two-modes-chat-vs-plan)
+  * [Verify AI Understanding](#verify-ai-understanding)
+  * [Fresh Chat for Review](#fresh-chat-for-review)
+  * [Rule of 3 Attempts](#rule-of-3-attempts)
+  * [Don't Fear Starting Over](#dont-fear-starting-over)
+  * [Complex Feature Workflow](#complex-feature-workflow)
+
 * [LLM Architectures: Encoder vs Decoder](#llm-architectures-encoder-vs-decoder)
 
   * [Wait, Don't All LLMs Understand Text?](#wait-dont-all-llms-understand-text)
@@ -95,6 +105,95 @@
   * [Links](#links-1)
 
 
+
+---
+
+# Claude Code Tutorial
+
+Turns out I was using Claude Code completely wrong. Here are the main insights that changed everything.
+
+## Voice Input Saves Hours
+
+Install Willow Voice for macOS or AquaVoice for Windows. Instead of typing prompts, just speak.
+
+Sounds trivial, but it changes everything. You speak 3-4x faster than you type. A detailed 5-paragraph prompt takes 2 minutes instead of 15. Plus these tools auto-clean all the "uh", "well", "like" filler words and format text properly.
+
+Alternative: dictate in ChatGPT UI, copy the transcribed text.
+
+More context in prompt = better AI output. Voice removes the friction.
+
+---
+
+## Two Modes: Chat vs Plan
+
+Claude Code has two main modes:
+
+**Chat Mode** — for analysis and architecture discussions. AI doesn't touch files here, only answers questions and explains.
+
+**Plan Mode** — for actual work. AI creates a detailed action plan, shows exactly what will be done, and only starts changing code after approval.
+
+The mistake I kept making: asking to write code immediately.
+
+The right approach: spend 80% of time discussing in Chat Mode, then switch to Plan Mode. Code written after proper discussion works on the first try.
+
+---
+
+## Verify AI Understanding
+
+After explaining the task, always ask: "Explain in your own words what you understood and how you're going to do it."
+
+If AI describes something wrong — the problem is your explanation, not the AI. Iterate until you get correct understanding.
+
+This saves hours of debugging later. The problem isn't that AI is dumb. The problem is we're bad at formulating tasks.
+
+---
+
+## Fresh Chat for Review
+
+After AI implements a feature, open a NEW chat and ask: "Analyze the implementation of this feature and describe how it works."
+
+If you review in the same chat where the code was written, AI will be biased: "I did everything correctly, as you asked." In a new chat it looks with fresh eyes and finds problems you missed.
+
+This trick regularly catches logic gaps and forgotten old implementations.
+
+---
+
+## Rule of 3 Attempts
+
+If after 3 debugging iterations the problem isn't solved — stop. Revert changes and start fresh in a new chat.
+
+In 99% of cases AI is "stuck" in wrong understanding of the problem. Further attempts only make it worse. Restart with new context solves the task faster than 2 more hours of fighting.
+
+Use experience from the failed attempt: "I tried approach X, we hit Y. Let's discuss a different option."
+
+---
+
+## Don't Fear Starting Over
+
+If you spent 30 minutes without progress — revert everything and start over.
+
+Yes, it feels like "I spent so much time, need to finish this." That's the trap. AI will recreate everything in 5 minutes if given the right context. While you'll keep struggling in the swamp for 2 more hours.
+
+Restart is not defeat. Restart is efficiency.
+
+---
+
+## Complex Feature Workflow
+
+The right sequence for non-trivial features:
+
+| Step | Mode | Action |
+|------|------|--------|
+| 1 | Chat | "Analyze current architecture" |
+| 2 | Chat | "Describe solution concept WITHOUT code" (3-5 discussion iterations) |
+| 3 | Plan | "Create detailed implementation plan" |
+| 4 | Plan | "Execute the plan" (go grab coffee) |
+| 5 | New chat | "Analyze what we got" |
+| 6 | Any | Bug fixes: max 5-6 iterations |
+
+80% of time goes to proper preparation, 20% to fixes. Without preparation it's the opposite.
+
+**TL;DR:** Talk more, code less. Voice input. Check understanding. Review in fresh chat. 3 failed attempts = restart. Don't be afraid to throw away 30 minutes of work.
 
 ---
 
